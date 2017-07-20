@@ -5,13 +5,13 @@
 ! satellite information
 !*******************************************************************************
 
-  sat_dis = sqrt(Re**2.0+(Re+sat_h)**2.0-2.0*Re*(Re+sat_h)*cos(lon(x,y)-sat_lon)*cos(lat(x,y)))
-  SCAN_ANGLE = 180.0/3.14159*asin(Re/sat_dis*sqrt(1-(cos(lon(x,y)-sat_lon)*cos(lat(x,y)))**2))
-  ZENITH_ANGLE = SCAN_ANGLE+180.0/3.14159*acos(cos(lon(x,y)-sat_lon)*cos(lat(x,y)))
-!write(*,*) xlong(x,y),lon(x,y)
-!write(*,*) lon(x,y)-sat_lon
-!write(*,*) cos(lon(x,y)-sat_lon)
-!write(*,*) acos(cos(lon(x,y)-sat_lon)*cos(lat(x,y)))
+  sat_dis = sqrt(Re**2.0+(Re+sat_h)**2.0-2.0*Re*(Re+sat_h)*cos(lon(x)-sat_lon)*cos(lat(y)))
+  SCAN_ANGLE = 180.0/3.14159*asin(Re/sat_dis*sqrt(1-(cos(lon(x)-sat_lon)*cos(lat(y)))**2))
+  ZENITH_ANGLE = SCAN_ANGLE+180.0/3.14159*acos(cos(lon(x)-sat_lon)*cos(lat(y)))
+!write(*,*) xlong(x,y),lon(x)
+!write(*,*) lon(x)-sat_lon
+!write(*,*) cos(lon(x)-sat_lon)
+!write(*,*) acos(cos(lon(x)-sat_lon)*cos(lat(y)))
 !write(*,*) 'SCAN_ANGLE',SCAN_ANGLE
 !write(*,*) 'ZENITH_ANGLE',ZENITH_ANGLE
 
@@ -32,18 +32,18 @@
    atm(1)%Climatology         = TROPICAL
    atm(1)%Absorber_Id(1:2)    = (/ H2O_ID, O3_ID /)
    atm(1)%Absorber_Units(1:2) = (/ MASS_MIXING_RATIO_UNITS, VOLUME_MIXING_RATIO_UNITS /)
-   atm(1)%Level_Pressure(0) = (pres(x,y,zmax)*3.0/2.0 - pres(x,y,zmax-1)/2.0) / 100.0  ! convert from Pa to hPA
+   atm(1)%Level_Pressure(0) = 0.5 !(pres(x,y,zmax)*3.0/2.0 - pres(x,y,zmax-1)/2.0) / 100.0  ! convert from Pa to hPA
 !   atm(1)%Level_Pressure(0) = 50.0
 
    do z=zmax,1,-1
      if(z.eq.1) then
        !atm(1)%Level_Pressure(zmax-z+1) = psfc(x,y) / 100.0  ! convert from Pa to hPA
-       atm(1)%Level_Pressure(zmax-z+1) = max(psfc(x,y), pres(x,y,1)*3.0/2.0 - pres(x,y,2)/2.0) / 100.0
+       atm(1)%level_pressure(zmax-z+1) = max(psfc(x,y), level_p(zmax)*3.0/2.0 - level_p(zmax-1)/2.0) ! max(psfc(x,y), pres(x,y,1)*3.0/2.0 - pres(x,y,2)/2.0) / 100.0
      else
-       atm(1)%Level_Pressure(zmax-z+1) = ((pres(x,y,z-1) + pres(x,y,z)) / 2.0) / 100.0  ! convert from Pa to hPA
+       atm(1)%Level_Pressure(zmax-z+1) = (level_p(zmax-z+1) + level_p(zmax-z+2) )/2.0 ! ((pres(x,y,z-1) + pres(x,y,z)) / 2.0) / 100.0  ! convert from Pa to hPA
      endif
-     atm(1)%Pressure(zmax-z+1)       = pres(x,y,z) / 100.0
-     atm(1)%Temperature(zmax-z+1)    = tk(x,y,z)
+     atm(1)%Pressure(zmax-z+1)       = level_p(zmax-z+1) !pres(x,y,z) / 100.0
+     atm(1)%Temperature(zmax-z+1)    = t(x,y,zmax-z+1) !tk(x,y,z)
      atm(1)%Absorber(zmax-z+1,1)     = qvapor(x,y,z)*1000.0
    enddo
 

@@ -1,8 +1,13 @@
 #!/bin/bash
 # mpif90 -f90=ifort
-mpif90  -c -convert big_endian -FR mpi_module.f
-mpif90  -c -convert big_endian -I$NETCDF/include module_netcdf.f
-mpif90  -c -convert big_endian -assume byterecl -traceback -FR -I$NETCDF/include -I$CRTM_DIR/include main_crtm.f90
-mpif90 -o crtm.exe mpi_module.o module_netcdf.o main_crtm.o -L$CRTM_DIR/lib -lCRTM -L$NETCDF/lib -lnetcdf -lnetcdff
+
+NETCDF_INC=/usr/include
+NETCDF_LIB=/usr/lib/x86_64-linux-gnu
+CRTM_DIR=/home/yxl232/lib/crtm_v2.2.3
+
+mpif90  -c -ffree-form -FR mpi_module.f
+mpif90  -c -I$NETCDF_INC module_netcdf.f
+mpif90  -c -ffree-form -FR -I$NETCDF_INC -I$CRTM_DIR/include main_crtm.f90
+mpif90 -o crtm.exe mpi_module.o module_netcdf.o main_crtm.o -L$CRTM_DIR/lib -lcrtm -L$NETCDF_LIB -lnetcdf -lnetcdff
 
 

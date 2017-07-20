@@ -26,32 +26,32 @@ PROGRAM crtm
   ! ----------
   ! Parameters for WRf output
   ! ----------
-   INTEGER, parameter :: xmax=297      !domain size in zonal direction
-   INTEGER, parameter :: ymax=297      !domain size in meridional direction
-   INTEGER, parameter :: zmax=60       !domain size in vertical direction
+   INTEGER, parameter :: xmax=360      !domain size in zonal direction
+   INTEGER, parameter :: ymax=181      !domain size in meridional direction
+   INTEGER, parameter :: zmax=31       !domain size in vertical direction
    INTEGER, parameter :: n_ch=4        !number of channles 
-   INTEGER, parameter :: i_yy=2015     !initial year
-   INTEGER, parameter :: i_mm=8        !initial month
-   INTEGER, parameter :: i_dd=1        !initial day
-   INTEGER, parameter :: i_hh=1        !initial hour
+   INTEGER, parameter :: i_yy=2017     !initial year
+   INTEGER, parameter :: i_mm=7        !initial month
+   INTEGER, parameter :: i_dd=13       !initial day
+   INTEGER, parameter :: i_hh=0        !initial hour
    INTEGER, parameter :: i_mn=0        !initial minute
-   INTEGER, parameter :: f_yy=2015     !final year
-   INTEGER, parameter :: f_mm=8        !final month
-   INTEGER, parameter :: f_dd=5        !final day
+   INTEGER, parameter :: f_yy=2017     !final year
+   INTEGER, parameter :: f_mm=7        !final month
+   INTEGER, parameter :: f_dd=13       !final day
    INTEGER, parameter :: f_hh=0        !final hour
    INTEGER, parameter :: f_mn=0        !final minutes
    INTEGER, parameter :: tint=60       !interval time [minutes] < 1 hour
    INTEGER, parameter :: hint=1        !interval time [minutes] in case tint>1h
    INTEGER, parameter :: dom =3        !WRF output domain
-   CHARACTER(*), PARAMETER ::DATA_DIR='DIRECTORY WHERE INPUT DATA ARE'
-   CHARACTER(*), PARAMETER ::OUTPUT_DIR='DIRECTORY WHERE OUTPUT DATA WILL BE'
+   CHARACTER(*), PARAMETER ::DATA_DIR='/home/yxl232/data2/GFS/gfsanl/201707/20170713'
+   CHARACTER(*), PARAMETER ::OUTPUT_DIR='/home/yxl232/data2/GFS/gfsanl/201707/20170713'
 
    REAL, PARAMETER :: P1000MB=100000.D0
    REAL, PARAMETER :: R_D=287.D0
    REAL, PARAMETER :: CP=7.D0*R_D/2.D0
    REAL, PARAMETER :: Re=6378000.0
    REAL, PARAMETER :: sat_h=35780000.0
-   REAL, PARAMETER :: sat_lon=140.0/180.0*3.14159
+   REAL, PARAMETER :: sat_lon=-89.5/180.0*3.14159
 
   ! ============================================================================
   ! 0. **** SOME SET UP PARAMETERS FOR THIS EXAMPLE ****
@@ -84,7 +84,9 @@ PROGRAM crtm
   INTEGER :: Allocate_Status
   INTEGER :: n_Channels
   INTEGER :: l, m, irec
-
+  integer :: fid, ncerr, x_dimid, y_dimid, ch_dimid, t_dimid, varid
+  integer :: dimids(4)
+  
   ! ============================================================================
   ! ---------
   ! Variables for WRF
@@ -96,10 +98,11 @@ PROGRAM crtm
   INTEGER :: k1, k2
   integer :: x, y, tt, v, z, n, reci, ens, n_ec,yy,mm,dd,hh,mn
   INTEGER :: ncl,icl
-  real :: xlat(xmax,ymax)  ! latitude
-  real :: xlong(xmax,ymax) ! longitude
-  real :: lat(xmax,ymax)   ! in radian
-  real :: lon(xmax,ymax)   ! in radian
+  real :: level_p(zmax)
+  real :: xlat(ymax)  ! latitude
+  real :: xlong(xmax) ! longitude
+  real :: lat(ymax)   ! in radian
+  real :: lon(xmax)   ! in radian
   real :: p(xmax,ymax,zmax)
   real :: pb(xmax,ymax,zmax)
   real :: pres(xmax,ymax,zmax)
@@ -161,7 +164,7 @@ PROGRAM crtm
   if(my_proc_id==0) WRITE( *,'(/5x,"Initializing the CRTM...")' )
   Error_Status = CRTM_Init( (/Sensor_Id/), &  ! Input... must be an array, hencethe (/../)
                             ChannelInfo  , &  ! Output
-                            IRwaterCoeff_File='WuSmith.IRwater.EmisCoeff.bin',&
+                            IRwaterCoeff_File='Nalli.IRwater.EmisCoeff.bin',&
                             IRlandCoeff_File='IGBP.IRland.EmisCoeff.bin',&
                             File_Path='coefficients/')
   IF ( Error_Status /= SUCCESS ) THEN
@@ -175,7 +178,7 @@ PROGRAM crtm
   ! ------------------------------------------
   ! Specify channel 14 for GOES-R ABI
   if (Sensor_Id == 'abi_gr' .or. Sensor_Id == 'ahi_h8') then
-    Error_Status = CRTM_ChannelInfo_Subset( ChannelInfo(1),Channel_Subset=(/8,9,10,14/) )
+    Error_Status = CRTM_ChannelInfo_Subset( ChannelInfo(1),Channel_Subset=(/13,14,15,16/) )
     IF ( Error_Status /= SUCCESS ) THEN
       Message = 'Error initializing CRTM'
       CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
@@ -205,6 +208,7 @@ PROGRAM crtm
     STOP
   END IF
 
+  call CRTM_RTSolution_Create( RTSolution,  N_LAYERS )
   ! 3b. Allocate the STRUCTURES
   ! ---------------------------
   ! The input FORWARD structure
@@ -255,7 +259,6 @@ PROGRAM crtm
       FILE_NAME = DATA_DIR//'/wrfout_d0'//file_date//':00'
       FILE_NAME = ADJUSTL(FILE_NAME)
       if(my_proc_id==0)write(*,*) FILE_NAME
-
   ! ============================================================================
   ! 4. **** ASSIGN INPUT DATA ****
   !
@@ -267,23 +270,53 @@ PROGRAM crtm
   ! 4a1. Loading Atmosphere and Surface input
   ! --------------------------------
   !   CALL Load_wrf_Data()
-  call get_variable2d(FILE_NAME,'XLAT',xmax,ymax,1,xlat)
-  call get_variable2d(FILE_NAME,'XLONG',xmax,ymax,1,xlong)
-  call get_variable3d(FILE_NAME,'P',xmax,ymax,zmax,1,p)
-  call get_variable3d(FILE_NAME,'PB',xmax,ymax,zmax,1,pb)
-  call get_variable3d(FILE_NAME,'PH',xmax,ymax,zmax+1,1,ph)
-  call get_variable3d(FILE_NAME,'PHB',xmax,ymax,zmax+1,1,phb)
-  call get_variable3d(FILE_NAME,'T',xmax,ymax,zmax,1,t)
-  call get_variable3d(FILE_NAME,'QVAPOR',xmax,ymax,zmax,1,qvapor)
-  call get_variable3d(FILE_NAME,'QCLOUD',xmax,ymax,zmax,1,qcloud)
-  call get_variable3d(FILE_NAME,'QRAIN',xmax,ymax,zmax,1,qrain)
-  call get_variable3d(FILE_NAME,'QICE',xmax,ymax,zmax,1,qice)
-  call get_variable3d(FILE_NAME,'QSNOW',xmax,ymax,zmax,1,qsnow)
-  call get_variable3d(FILE_NAME,'QGRAUP',xmax,ymax,zmax,1,qgraup)
-  call get_variable2d(FILE_NAME,'PSFC',xmax,ymax,1,psfc)
-  call get_variable2d(FILE_NAME,'TSK',xmax,ymax,1,tsk)
-  call get_variable2d(FILE_NAME,'HGT',xmax,ymax,1,hgt)
-  call get_variable2d(FILE_NAME,'LANDMASK',xmax,ymax,1,landmask)
+
+
+!  call get_variable2d(FILE_NAME,'XLAT',xmax,ymax,1,xlat)
+!  call get_variable2d(FILE_NAME,'XLONG',xmax,ymax,1,xlong)
+!  call get_variable3d(FILE_NAME,'P',xmax,ymax,zmax,1,p)
+!  call get_variable3d(FILE_NAME,'PB',xmax,ymax,zmax,1,pb)
+!  call get_variable3d(FILE_NAME,'PH',xmax,ymax,zmax+1,1,ph)
+!  call get_variable3d(FILE_NAME,'PHB',xmax,ymax,zmax+1,1,phb)
+!  call get_variable3d(FILE_NAME,'T',xmax,ymax,zmax,1,t)
+!  call get_variable3d(FILE_NAME,'QVAPOR',xmax,ymax,zmax,1,qvapor)
+!  call get_variable3d(FILE_NAME,'QCLOUD',xmax,ymax,zmax,1,qcloud)
+!  call get_variable3d(FILE_NAME,'QRAIN',xmax,ymax,zmax,1,qrain)
+!  call get_variable3d(FILE_NAME,'QICE',xmax,ymax,zmax,1,qice)
+!  call get_variable3d(FILE_NAME,'QSNOW',xmax,ymax,zmax,1,qsnow)
+!  call get_variable3d(FILE_NAME,'QGRAUP',xmax,ymax,zmax,1,qgraup)
+!  call get_variable2d(FILE_NAME,'PSFC',xmax,ymax,1,psfc)
+!  call get_variable2d(FILE_NAME,'TSK',xmax,ymax,1,tsk)
+!  call get_variable2d(FILE_NAME,'HGT',xmax,ymax,1,hgt)
+!  call get_variable2d(FILE_NAME,'LANDMASK',xmax,ymax,1,landmask)
+
+  ! hardware the file name for testing
+  FILE_NAME='/home/yxl232/data2/GFS/gfsanl/201707/20170713/gfsanl_3_20170713_0000_000.nc'
+  print *, FILE_NAME
+  call get_variable1d(FILE_NAME,'pressure',zmax,1,level_p)
+  call get_variable1d(FILE_NAME,'latitude',ymax,1,xlat)
+  call get_variable1d(FILE_NAME,'longitude',xmax,1,xlong)
+!  call get_variable3d(FILE_NAME,'P',xmax,ymax,zmax,1,p)
+!  call get_variable3d(FILE_NAME,'PB',xmax,ymax,zmax,1,pb)
+!  call get_variable3d(FILE_NAME,'PH',xmax,ymax,zmax+1,1,ph)
+!  call get_variable3d(FILE_NAME,'PHB',xmax,ymax,zmax+1,1,phb)
+  call get_variable3d(FILE_NAME,'TMP',xmax,ymax,zmax,1,t)
+!  call get_variable3d(FILE_NAME,'QVAPOR',xmax,ymax,zmax,1,qvapor)
+!  call get_variable3d(FILE_NAME,'QCLOUD',xmax,ymax,zmax,1,qcloud)
+!  call get_variable3d(FILE_NAME,'QRAIN',xmax,ymax,zmax,1,qrain)
+!  call get_variable3d(FILE_NAME,'QICE',xmax,ymax,zmax,1,qice)
+!  call get_variable3d(FILE_NAME,'QSNOW',xmax,ymax,zmax,1,qsnow)
+!  call get_variable3d(FILE_NAME,'QGRAUP',xmax,ymax,zmax,1,qgraup)
+  call get_variable2d(FILE_NAME,'PRES_surface',xmax,ymax,1,psfc)
+  call get_variable2d(FILE_NAME,'TMP_surface',xmax,ymax,1,tsk)
+!  call get_variable2d(FILE_NAME,'HGT',xmax,ymax,1,hgt)
+!  call get_variable2d(FILE_NAME,'LANDMASK',xmax,ymax,1,landmask)
+
+
+
+
+
+
   lat = xlat/180.0*3.14159
   lon = xlong/180.0*3.14159
   pres = P + PB
@@ -309,7 +342,7 @@ PROGRAM crtm
   yend=min(ymax,(my_proc_id+1)*nyi)
   do y=ystart,yend
   do x=1, xmax
-  CALL Convert_wrf_crtm()
+  CALL Convert_wrf_crtm_nocloud()
 
   ! 4b. GeometryInfo input
   ! ----------------------
@@ -328,6 +361,12 @@ PROGRAM crtm
   ! ============================================================================
   ! 5. **** CALL THE CRTM FORWARD MODEL ****
   !
+
+if( zenith_angle > 0 .and. zenith_angle < 80) then
+if( zenith_angle <2 .and. y==90) then
+    print *, RTSolution(4,1)%Radiance
+    call CRTM_RTSolution_ZERO(RTSolution)
+endif
   Error_Status = CRTM_Forward( Atm        , &
                                Sfc        , &
                                Geometry   , &
@@ -339,6 +378,23 @@ PROGRAM crtm
     CALL Display_Message( PROGRAM_NAME, Message, FAILURE )
     STOP
   END IF
+if( zenith_angle <31 .and. zenith_angle >29 .and. y==90) then
+    print *, RTSolution(4,1)%Is_Allocated
+    call CRTM_RTSolution_Inspect(RTSolution(4,1))
+    print *, sum(RTSolution(4,1)%Layer_Optical_Depth)
+    
+    
+    print *, (RTSolution(4,1)%Surface_Planck_Radiance * RTSolution(4,1)%Surface_Emissivity + &
+              RTSolution(4,1)%Down_Radiance           * RTSolution(4,1)%Surface_Reflectivity ) 
+    
+         
+    print *, (RTSolution(4,1)%Surface_Planck_Radiance * RTSolution(4,1)%Surface_Emissivity + &
+              RTSolution(4,1)%Down_Radiance           * RTSolution(4,1)%Surface_Reflectivity ) * &
+            product( exp(-1.0 * (RTSolution(4,1)%Layer_Optical_Depth(1:31))/ cos(zenith_angle *PI/180.0) )) + &
+             RTSolution(4,1)%Up_radiance 
+endif
+end if
+
   ! ============================================================================
 
 
@@ -360,12 +416,16 @@ PROGRAM crtm
   !END DO
 
   !---for file output, edited 2014.9.26
+if( zenith_angle > 0 .and. zenith_angle < 80) then
   do l = 1, n_Channels
     do m = 1, N_PROFILES
       Tbsend(x,y,l) = real(RTSolution(l,m)%Brightness_Temperature)
    enddo
   enddo
-   !WRITE(*,'(7x,"Profile (",i0,", ",i0,") finished Tb = ",f6.2)')x,y,Tbsend(x,y,2)
+else
+    Tbsend(x,y,:) = NF_FILL_FLOAT
+endif
+  !WRITE(*,'(7x,"Profile (",i0,", ",i0,") finished Tb = ",f6.2)')x,y,Tbsend(x,y,2)
   ! ============================================================================
 
 !--- end of x,y-loop
@@ -384,13 +444,13 @@ PROGRAM crtm
     do y = 1, ymax
     do x = 1, xmax
       irec= irec +1
-      write( 10, rec=irec) xlong(x,y)
+      write( 10, rec=irec) xlong(x)
     enddo
     enddo
     do y = 1, ymax
     do x = 1, xmax
       irec= irec +1
-      write( 10, rec=irec) xlat(x,y)
+      write( 10, rec=irec) xlat(y)
     enddo
     enddo
 
@@ -405,6 +465,40 @@ PROGRAM crtm
     close (10)
   !  initializing the Tbsend fields for Bcast
     Tbsend = 0.0
+
+    ncerr = nf_create(trim(FILE_NAME)//'.out.nc', nf_clobber, fid) 
+    if (ncerr .ne. nf_noerror) then
+        print *, 'Error: ', nf_strerror(ncerr)
+    endif
+    
+    ncerr = nf_def_dim(fid, 'lat', ymax, x_dimid)
+    if (ncerr .ne. nf_noerror) then
+        print *, 'Error: ', nf_strerror(ncerr)
+    endif
+    ncerr = nf_def_dim(fid, 'lon', xmax, y_dimid)
+    if (ncerr .ne. nf_noerror) then
+        print *, 'Error: ', nf_strerror(ncerr)
+    endif
+    ncerr = nf_def_dim(fid, 'ch',  4,   ch_dimid)
+    if (ncerr .ne. nf_noerror) then
+        print *, 'Error: ', nf_strerror(ncerr)
+    endif
+    ncerr = nf_def_dim(fid, 'time',  4,   t_dimid)
+    if (ncerr .ne. nf_noerror) then
+        print *, 'Error: ', nf_strerror(ncerr)
+    endif
+    dimids(2) = x_dimid
+    dimids(1) = y_dimid
+    dimids(3) = ch_dimid
+    dimids(4) = t_dimid
+    ncerr = nf_def_var(fid, 'tb', NF_FLOAT, 4, dimids, varid)
+    if (ncerr .ne. nf_noerror) then
+        print *, 'Error: ', nf_strerror(ncerr)
+    endif
+    ncerr = nf_enddef(fid)
+
+    call write_variable3d(fid, 'tb', xmax, ymax, 4, 1, TB)
+    call close_file(fid)
   endif
 
   ! ============================================================================
@@ -461,7 +555,7 @@ PROGRAM crtm
 
 CONTAINS
 
-  INCLUDE "Convert_wrf_crtm.inc"
+  INCLUDE "Convert_wrf_crtm_nocloud.inc"
 
 END PROGRAM crtm
 
