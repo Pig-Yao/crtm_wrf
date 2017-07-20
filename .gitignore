@@ -2,3 +2,4 @@ coefficients_bac
 *.o
 *.exe
 *.mod
+makefile
